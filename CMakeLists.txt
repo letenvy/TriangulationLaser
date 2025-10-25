@@ -1,8 +1,11 @@
 cmake_minimum_required(VERSION 3.14)
+cmake_policy(SET CMP0167 NEW)
 project(LaserScanner)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 #====================MODBUS ====================#
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(MODBUS REQUIRED libmodbus)

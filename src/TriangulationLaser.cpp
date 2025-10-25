@@ -4,6 +4,7 @@
 #include <fstream>
 #include <thread>
 #include <chrono>
+#include <iomanip>
 
 constexpr int LASER_CONTROL_REG =0x000A;
 constexpr int MEASUREMENT_REG =5;
@@ -12,7 +13,7 @@ bool TriangulationLaser::switchToModbus(){
     try{
         boost::asio::io_context io;
         boost::asio::serial_port serial(io);
-
+        
         std::string port=portName_;
     #ifdef _WIN32
         if(!port.empty()&&port.find("COM")==0&&port.size()>4){
@@ -55,13 +56,14 @@ bool TriangulationLaser::switchToModbus(){
 TriangulationLaser::TriangulationLaser( const std::string& portName,
                                         int baudrate,char parity,
                                         int dataBits,int stopBits,
-                                        int slaveId)
+                                        int slaveId, double sensorRangeMm)
     :portName_(portName)
     ,baudrate_(baudrate)
     ,parity_(parity)
     ,dataBits_(dataBits)
     ,stopBits_(stopBits)
     ,slaveId_(slaveId)
+    ,sensorRangeMm_(sensorRangeMm)
     ,ctx_(nullptr)
     ,connected_(false)
 {
@@ -124,7 +126,7 @@ bool TriangulationLaser::isConnected() const{
     return connected_;
 }
 
-bool TriangulationLaser::setLaserEnable(bool enable){
+bool TriangulationLaser::setLaserEnabled(bool enable){
     if(!connected_){
         std::cerr<<"[Laser] Not connected!"<<std::endl;
         return false;
@@ -138,20 +140,20 @@ bool TriangulationLaser::setLaserEnable(bool enable){
     return true;
 }
 
-bool TriangulationLaser::readMeasurement(uint16_t& value){
+bool TriangulationLaser::readRawMeasurement(uint16_t& rawValue){
     if(!connected_){
         std::cerr<<"[Laser] Not connected"<<std::endl;
         return false;
     }
 
-    if(modbus_read_input_registers(ctx_,MEASUREMENT_REG,1,&value)!=1){
+    if(modbus_read_input_registers(ctx_,MEASUREMENT_REG,1,&rawValue)!=1){
         handleError("modbus_read_input_registers");
         return false;
     }
     return true;
 }
 
-bool TriangulationLaser::startMeasurementCycle(int durationSeconds,int intervalMs,const std::string& filename){
+bool TriangulationLaser::startRawMeasurementCycle(int durationSeconds,int intervalMs,const std::string& filename){
     if(!connected_){
         std::cerr<<"[Laser] Not connected!"<<std::endl;
         return false;
@@ -162,12 +164,12 @@ bool TriangulationLaser::startMeasurementCycle(int durationSeconds,int intervalM
     auto duration =std::chrono::seconds(durationSeconds);
     auto interval=std::chrono::milliseconds(intervalMs);
 
-    std::cout<<"[Laser] Starting measurement cycle..."<<std::endl;
+    std::cout<<"[Laser] Starting raw measurement cycle..."<<std::endl;
 
     while(std::chrono::steady_clock::now()-start<duration){
-        uint16_t val;
-        if(readMeasurement(val)){
-            data.push_back(val);
+        uint16_t rawVal;
+        if(readRawMeasurement(rawVal)){
+            data.push_back(rawVal);
         }
         std::this_thread::sleep_for(interval);
     }
@@ -193,4 +195,50 @@ void TriangulationLaser::handleError(const std::string&context)const{
         err=strerror(errno);
     }
     std::cerr<<"[Laser ERROR] "<<context<<": "<<err<<" (errno="<<errno<<")"<<std::endl;
+}
+
+double TriangulationLaser::convertRawToMm(uint16_t rawValue) const{
+    constexpr double FULL_SCALE = 16384; //0x4000
+    if (sensorRangeMm_<=0.0){
+        std::cerr<<"[Laser] Invalid sensor range: "<<sensorRangeMm_<<std::endl;
+        return 0.0;
+    }
+    return static_cast<double>(rawValue)*sensorRangeMm_/FULL_SCALE;
+}
+
+bool TriangulationLaser::startConvertedMeasurementCycle(int durationSeconds,int intervalMs,const std::string&filename){
+    if(!connected_){
+            std::cerr<<"[Laser] Not connected!"<<std::endl;
+            return false;
+        }
+
+    std::vector<double>data;
+    auto start=std::chrono::steady_clock::now();
+    auto duration =std::chrono::seconds(durationSeconds);
+    auto interval=std::chrono::milliseconds(intervalMs);
+
+    std::cout<<"[Laser] Starting converted measurement cycle..."<<std::endl;
+
+    while(std::chrono::steady_clock::now()-start<duration){
+        uint16_t rawVal;
+        if(readRawMeasurement(rawVal)){
+            double mm=convertRawToMm(rawVal);
+            data.push_back(mm);
+        }
+        std::this_thread::sleep_for(interval);
+    }
+
+    std::ofstream file(filename);
+    if(!file.is_open()){
+        std::cerr<<"[Laser] Cannot open file: "<<filename<<std::endl;
+        return false;
+    }
+
+    for(double v:data){
+        file<<std::fixed<<std::setprecision(3)<<v<<'\n';
+    }
+    file.close();
+
+    std::cout<<"[Laser] Saved "<<data.size()<<" points to "<<filename<<std::endl;
+    return true;
 }
