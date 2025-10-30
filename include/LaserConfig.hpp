@@ -1,7 +1,8 @@
 #pragma once
 #include <string>
 
-struct LaserTestConfig {
+struct LaserConfig {
+    std::string deviceName="Generic";
     std::string port;
     int baudrate;
     char parity;
