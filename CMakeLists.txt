@@ -6,29 +6,33 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-#====================MODBUS ====================#
+# ======/  Dependendencies /======
+#   ---/   MODBUS  /---
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(MODBUS REQUIRED libmodbus)
-#====================BOOST  ====================#
+pkg_check_modules(MODBUS REQUIRED IMPORTED_TARGET libmodbus)
+
+#   ---/   BOOST   /---
 find_package(Boost REQUIRED COMPONENTS system)
 
-add_executable(laser_scanner    
-    src/laser_test.cpp
-    src/main.cpp
+# ======/   SOURCES  /======
+set(SOURCES
     src/TriangulationLaser.cpp
+    src/ConsoleInput.cpp
+    src/laser_test.cpp
 )
-
+# ---/  Executable  /---
+add_executable(laser_scanner ${SOURCES})
+# ---/  Headers /---
 target_include_directories(laser_scanner PRIVATE 
-${MODBUS_INCLUDE_DIRS}
-include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
-
-target_link_directories(laser_scanner PRIVATE 
-${MODBUS_LIBRARY_DIRS}
-)
-
+# ---/ Link /---
 target_link_libraries(laser_scanner 
-${MODBUS_LIBRARIES} 
-Boost::system
-ws2_32
+    PkgConfig::MODBUS
+    Boost::system
 )
+
+# ---/  Windows-special  /---
+if(WIN32)
+    target_link_libraries(laser_scanner ws2_32)
+endif()

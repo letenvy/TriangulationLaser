@@ -44,16 +44,16 @@ int main(){
 #endif
     <<std::endl;
 
-    std::cout<<'='*5+"/\tlaser tester\t/"+'='*5<<std::endl;
+    std::cout<<"==========/\tlaser tester\t/=========="<<std::endl;
     std::cout<<"Device:\t\t"<<default_config.deviceName<<std::endl;
     std::cout<<"Port:\t\t"<<default_config.port<<std::endl;
-    std::cout<<"Baudrate:\t\t"<<default_config.baudrate<<std::endl;
+    std::cout<<"Baudrate:\t"<<default_config.baudrate<<std::endl;
     std::cout<<"Parity:\t\t"<<default_config.parity<<std::endl;
-    std::cout<<"Data bits:\t\t"<<default_config.dataBits<<std::endl;
-    std::cout<<"Stop bits:\t\t"<<default_config.stopBits<<std::endl;
-    std::cout<<"Slave ID:\t\t"<<default_config.slaveId<<std::endl;
-    std::cout<<"Sensor range:\t\t"<<default_config.sensorRangeMm<<" mm"<<std::endl;
-    std::cout<<"Update every:\t\t"<<default_config.updateIntervalMs<<" ms"<<std::endl;
+    std::cout<<"Data bits:\t"<<default_config.dataBits<<std::endl;
+    std::cout<<"Stop bits:\t"<<default_config.stopBits<<std::endl;
+    std::cout<<"Slave ID:\t"<<default_config.slaveId<<std::endl;
+    std::cout<<"Sensor range:\t"<<default_config.sensorRangeMm<<" mm"<<std::endl;
+    std::cout<<"Update every:\t"<<default_config.updateIntervalMs<<" ms"<<std::endl;
     waitForEnter();
 
     // to be continued
