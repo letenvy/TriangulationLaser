@@ -31,7 +31,7 @@ void clearConsole(){
 }
 
 void waitForEnter(){
-    std::cout<<"\nPress ENTER to continue...";
+    std::cout<<"\nPress ENTER to continue . . .";
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(),'\n');
 }
 
@@ -55,6 +55,34 @@ int main(){
     std::cout<<"Sensor range:\t"<<default_config.sensorRangeMm<<" mm"<<std::endl;
     std::cout<<"Update every:\t"<<default_config.updateIntervalMs<<" ms"<<std::endl;
     waitForEnter();
+    clearConsole();
+
+    std::cout<<"\n\nConnecting to laser module . . ."<<std::endl;
+
+    TriangulationLaser laser(
+        default_config.port,
+        default_config.baudrate,
+        default_config.parity,
+        default_config.dataBits,
+        default_config.stopBits,
+        default_config.slaveId,
+        default_config.sensorRangeMm
+    );
+
+    if(!laser.connect()){
+        std::cerr<<"Failed to connect to the laser!"<<std::endl;
+        return 1;
+    }
+
+    std::cout<<"Connected successfully!"<<std::endl;
+
+    waitForEnter();
+
+    std::cout<<"Switching to MODBUS. . ."<<std::endl;
+    laser.switchToModbus();
+    std::cout<<"Switched successfully!"<<std::endl;
+    waitForEnter();
+    clearConsole();
 
     // to be continued
 
