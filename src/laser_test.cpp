@@ -5,6 +5,10 @@
 #include <iostream>
 #include <thread>
 #include <chrono>
+#include <sstream>
+#include <vector>
+#include <iterator>
+#include <iomanip>
 
 LaserConfig default_config ={
     .deviceName="RIFTEK RF 603 125/500-232-U",
@@ -34,6 +38,9 @@ void waitForEnter(){
     std::cout<<"\nPress ENTER to continue . . .";
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(),'\n');
 }
+
+void runLiveMode(TriangulationLaser& laser, int intervalMs);
+void runLoggingMode(TriangulationLaser& laser, int intervalMs,const std::string& mode, double targetValue);
 
 int main(){
     std::cout<<"Detected OS: "
@@ -84,7 +91,80 @@ int main(){
     waitForEnter();
     clearConsole();
 
-    // to be continued
+    laser.setLaserEnabled(false);
+    
+    std::string command;
 
+    std::cout   <<"Available commands:\n"
+                <<" on\t\t\t- enable laser\n"
+                <<" off\t\t\t- disable laser\n"
+                <<" start\t\t- live display (ESC to stop)\n"
+                <<" start-log ontime N\t-log for N seconds\n"
+                <<" start-log onsample N\t-log for N samples\n"
+                <<" start-log onenter\t\t-log until ESC pressed\n"
+                <<" exit\t\t\t-quit\n"
+                <<" \nEnter command: ";
+
+    while (std::getline(std::cin,command)){
+        std::istringstream iss(command);
+        std::vector<std::string> tokens{std::istream_iterator<std::string>{iss},
+                                        std::istream_iterator<std::string>{}};
+        
+        if (tokens.empty()){
+            std::cout<<"\nEnter command: ";
+            continue;
+        }
+
+        std::string cmd=tokens[0];
+
+        if(cmd=="exit"){
+            break;
+        }else if (cmd=="on"){
+            laser.setLaserEnabled(true);
+            std::cout<<"Laser ON"<<std::endl;
+        }else if (cmd=="off"){
+            laser.setLaserEnabled(false);
+            std::cout<<"Laser OFF"<<std::endl;
+        }else if (cmd=="start"){
+            runLiveMode(laser,default_config.updateIntervalMs);
+            
+        }else if (cmd=="start-log"){
+            std::string mode="onenter";
+            std::string value="";
+
+            if (tokens.size()>=2){
+                mode=tokens[1];
+                if(tokens.size()>=3){
+                    value=tokens[2];
+                }
+            }
+
+            if(mode=="ontime"&& !value.empty()){
+                double duration=std::stod(value);
+                runLoggingMode(laser,default_config.updateIntervalMs,"time",duration);
+            }else if(mode=="ontime"&& !value.empty()){
+                int samples=std::stoi(value);
+                runLoggingMode(laser,default_config.updateIntervalMs,"sample",static_cast<double>(samples));
+            }else if(mode=="onenter"&& !value.empty()){
+                runLoggingMode(laser,default_config.updateIntervalMs,"enter",0.0);
+            }else{
+                std::cout<<"Usage: start-log [ontime N | onsample | onenter]"<<std::endl;
+            }
+        }else{
+            std::cout<<"Unknown command. Type 'exit' to quit.\n";
+        }
+        std::cout<<"\nEnter command: ";
+    }
+    
+    laser.setLaserEnabled(false);
+    laser.disconnect();
+    std::cout<<"\nGoodbye!"<<std::endl;
     return 0;
+}
+
+void runLiveMode(TriangulationLaser& laser, int intervalMs){
+    // to be continued
+}
+void runLoggingMode(TriangulationLaser& laser, int intervalMs,const std::string& mode, double targetValue){
+    // to be continued
 }
