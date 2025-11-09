@@ -69,8 +69,6 @@ int main(){
     waitForEnter();
     clearConsole();
 
-    std::cout<<"\n\nConnecting to laser module . . ."<<std::endl;
-
     TriangulationLaser laser(
         default_config.port,
         default_config.baudrate,
@@ -81,20 +79,27 @@ int main(){
         default_config.sensorRangeMm
     );
 
+    std::cout<<"Switching to MODBUS. . ."<<std::endl;
+    if(!laser.switchToModbus()){
+        std::cerr<<"Failed to switch laser to MODBUS"<<std::endl;
+        waitForEnter();
+        return 1;
+    }
+    std::cout<<"Switched successfully!"<<std::endl;
+    waitForEnter();
+    clearConsole();
+
+    std::cout<<"\n\nConnecting to laser module . . ."<<std::endl;
+
     if(!laser.connect()){
         std::cerr<<"Failed to connect to the laser!"<<std::endl;
+        waitForEnter();
         return 1;
     }
 
     std::cout<<"Connected successfully!"<<std::endl;
 
     waitForEnter();
-
-    std::cout<<"Switching to MODBUS. . ."<<std::endl;
-    laser.switchToModbus();
-    std::cout<<"Switched successfully!"<<std::endl;
-    waitForEnter();
-    clearConsole();
 
     laser.setLaserEnabled(false);
     
