@@ -6,7 +6,7 @@ RIFTEK-based triangular laser control class
 
 **work in progress...**
 
-1. Class for laser modul
-2. Class for terminal input
-3. Tester
-4. TCP/UDP connect -?
+1. Class for laser module           - not tested yet
+2. Class for console input          - not tested yet
+3. Executable console laser tester  - not tested yet
+4. TCP/UDP connection               - to be continued

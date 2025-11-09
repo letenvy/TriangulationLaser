@@ -25,11 +25,10 @@ public:
 
     bool startRawMeasurementCycle(int durationSeconds,int intervalMs,const std::string& filename);
     bool startConvertedMeasurementCycle(int durationSeconds,int intervalMs,const std::string& filename);
-
-private:
     bool readRawMeasurement(uint16_t& rawValue);
     double convertRawToMm(uint16_t rawValue) const;
-
+    
+private:
     std::string normalizePortName(const std::string& port) const;
     void handleError(const std::string&context) const;
     

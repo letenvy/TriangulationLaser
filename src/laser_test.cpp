@@ -9,6 +9,11 @@
 #include <vector>
 #include <iterator>
 #include <iomanip>
+#include <limits>
+#include <fstream>
+#include <algorithm>
+
+#include <nlohmann/json.hpp>
 
 LaserConfig default_config ={
     .deviceName="RIFTEK RF 603 125/500-232-U",
@@ -40,7 +45,7 @@ void waitForEnter(){
 }
 
 void runLiveMode(TriangulationLaser& laser, int intervalMs);
-void runLoggingMode(TriangulationLaser& laser, int intervalMs,const std::string& mode, double targetValue);
+void runLiveLoggingMode(TriangulationLaser& laser, int intervalMs,const std::string& mode, double targetValue);
 
 int main(){
     std::cout<<"Detected OS: "
@@ -140,17 +145,39 @@ int main(){
             }
 
             if(mode=="ontime"&& !value.empty()){
-                double duration=std::stod(value);
-                runLoggingMode(laser,default_config.updateIntervalMs,"time",duration);
-            }else if(mode=="ontime"&& !value.empty()){
-                int samples=std::stoi(value);
-                runLoggingMode(laser,default_config.updateIntervalMs,"sample",static_cast<double>(samples));
-            }else if(mode=="onenter"&& !value.empty()){
-                runLoggingMode(laser,default_config.updateIntervalMs,"enter",0.0);
-            }else{
+                try
+                {
+                    double duration=std::stod(value);
+                    runLiveLoggingMode(laser,default_config.updateIntervalMs,"time",duration);
+                } 
+                catch(const std::exception& e)
+                {
+                    std::cout<<"Invalid duration value: "<<e.what()<<std::endl;
+                }
+                
+            }
+            else if(mode=="onsample"&& !value.empty())
+            {
+                try{
+                    int samples=std::stoi(value);
+                    runLiveLoggingMode(laser,default_config.updateIntervalMs,"sample",static_cast<double>(samples));
+                }
+                catch(const std::exception& e)
+                {
+                    std::cout<<"Invalid sample value: "<<e.what()<<std::endl;
+                }
+            }
+            else if(mode=="onenter")
+            {
+                runLiveLoggingMode(laser,default_config.updateIntervalMs,"enter",0.0);
+            }
+            else
+            {
                 std::cout<<"Usage: start-log [ontime N | onsample | onenter]"<<std::endl;
             }
-        }else{
+        }
+        else
+        {
             std::cout<<"Unknown command. Type 'exit' to quit.\n";
         }
         std::cout<<"\nEnter command: ";
@@ -162,9 +189,156 @@ int main(){
     return 0;
 }
 
-void runLiveMode(TriangulationLaser& laser, int intervalMs){
-    // to be continued
+struct MeasurementData{
+    uint16_t raw;
+    double mm;
+    bool success;
+    std::chrono::steady_clock::time_point measurementStart;
+    std::chrono::steady_clock::time_point measurementEnd;
+    std::chrono::system_clock::time_point globalTime;
+};
+
+MeasurementData performMeasurement(TriangulationLaser& laser){
+    MeasurementData data;
+
+    data.measurementStart=std::chrono::steady_clock::now();
+
+    data.success=laser.readRawMeasurement(data.raw);
+    if(data.success)
+    {
+        data.mm=laser.convertRawToMm(data.raw);
+    }
+
+    data.measurementEnd=std::chrono::steady_clock::now();
+    data.globalTime=std::chrono::system_clock::now();
+
+    return data;
 }
-void runLoggingMode(TriangulationLaser& laser, int intervalMs,const std::string& mode, double targetValue){
-    // to be continued
+
+void runLiveMode(TriangulationLaser& laser, int intervalMs){
+    clearConsole();
+    std::cout<<" Live mode\t(press ESC to stop)\n"<<std::endl;
+
+    ConsoleInput input;
+    bool running=true;
+    auto lastMeasurementStart=std::chrono::steady_clock::now();
+
+    while(running && laser.isConnected()){
+        if(input.isEscapePressed()){
+            running=false;
+            break;
+        }
+
+        MeasurementData data=performMeasurement(laser);
+
+        double dt=std::chrono::duration<double>(data.measurementStart-lastMeasurementStart).count();
+        double hz=(dt>0)?1.0/dt:0.0;
+        lastMeasurementStart=data.measurementStart;
+
+        if(data.success){
+            std::cout<<data.mm<<" mm\r|\r"<<std::fixed<<std::setprecision(1)<<hz<<" Hz\r";
+        }
+        else
+        {
+            std::cout<<"Measurement failed!\r";
+        }
+        std::cout.flush();
+        std::this_thread::sleep_for(std::chrono::milliseconds(intervalMs));
+    }
+
+    std::cout<<"\nReturning"<<std::endl;
+    waitForEnter();
+    clearConsole();
+}
+
+void runLiveLoggingMode(TriangulationLaser& laser, int intervalMs,const std::string& mode, double targetValue){
+    clearConsole();
+    std::cout<<" Live logging mode\t(press ESC to stop)"<<std::endl;
+
+    ConsoleInput input;
+    bool running=true;
+    int sampleCount=0;
+    auto startTime=std::chrono::steady_clock::now();
+
+    auto logTime=std::chrono::system_clock::now();
+    std::time_t logTimeT=std::chrono::system_clock::to_time_t(logTime);
+    std::stringstream filenameSS;
+    filenameSS<<"laser_log_"<<std::put_time(std::localtime(&logTimeT),"%Y%m%d_%H%M%S")<<".json";
+    std::string filename=filenameSS.str();
+
+    std::ofstream logFile(filename);
+    if(!logFile.is_open()){
+        std::cerr<<"Failed to create log file: "<<filename<<std::endl;
+        return;
+    }
+
+    std::cout<<"Logging to: "<<filename<<'\n'<<std::endl;
+
+    auto lastMeasurementStart=std::chrono::steady_clock::now();
+
+    logFile<<"[\n";
+    bool firstEntry=true;
+
+    while(running&&laser.isConnected()){
+        if(input.isEscapePressed()){
+            std::cout<<"\nLogging stopped by user"<<std::endl;
+            running=false;
+            break;
+        }
+
+        if(mode=="time"){
+            auto currentTime=std::chrono::steady_clock::now();
+            double elapsed=std::chrono::duration<double>(currentTime-startTime).count();
+            if(elapsed>=targetValue){
+                std::cout<<"\nLogging time completed"<<std::endl;
+                break;
+            }
+        }
+        else if(mode=="sample"){
+            if(sampleCount>=static_cast<int>(targetValue)){
+                std::cout<<"\nSample count completed"<<std::endl;
+                break;
+            }
+        }
+
+        MeasurementData data =performMeasurement(laser);
+
+        double dt=std::chrono::duration<double>(data.measurementStart-lastMeasurementStart).count();
+        double hz=(dt>0)?1.0/dt:0.0;
+        lastMeasurementStart=data.measurementStart;
+
+        if(data.success){
+            std::cout   <<"Sample "<<sampleCount+1<<": "<<data.mm<<" mm | "
+                        <<std::fixed<<std::setprecision(1)<<hz<<" Hz\r";
+        }
+        else
+        {
+            std::cout<<"Sample "<<sampleCount+1<<"Measurement failed!\r";
+        }
+        std::cout.flush();
+
+        nlohmann::json jsonEntry;
+        jsonEntry["timestamp"]=std::chrono::duration_cast<std::chrono::milliseconds>(
+            data.globalTime.time_since_epoch()).count();
+        jsonEntry["raw"]=data.raw;
+        jsonEntry["mm"]=data.mm;
+        
+        if(!firstEntry){
+            logFile<<",\n";
+        }
+        logFile<<jsonEntry.dump(4);
+        logFile.flush();
+
+        firstEntry=false;
+        sampleCount++;
+        std::this_thread::sleep_for(std::chrono::milliseconds(intervalMs));
+    }
+
+    logFile<<"\n]\n";
+    logFile.close();
+
+    std::cout<<"\nLog saved to: "<<filename<<std::endl;
+    std::cout<<"Returning"<<std::endl;
+    waitForEnter();
+    clearConsole();
 }

@@ -2,6 +2,6 @@
 #include "LaserConfig.hpp"
 
 int main() {
-    //nothing to do until laser tester not finished
+    //to be continued
     return 0;
 }

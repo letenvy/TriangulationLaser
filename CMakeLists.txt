@@ -14,6 +14,9 @@ pkg_check_modules(MODBUS REQUIRED IMPORTED_TARGET libmodbus)
 #   ---/   BOOST   /---
 find_package(Boost REQUIRED COMPONENTS system)
 
+# ---/  JSON    /---
+find_package(nlohmann_json REQUIRED)
+
 # ======/   SOURCES  /======
 set(SOURCES
     src/TriangulationLaser.cpp
@@ -30,6 +33,7 @@ target_include_directories(laser_scanner PRIVATE
 target_link_libraries(laser_scanner 
     PkgConfig::MODBUS
     Boost::system
+    nlohmann_json::nlohmann_json
 )
 
 # ---/  Windows-special  /---
