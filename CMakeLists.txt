@@ -14,29 +14,29 @@ pkg_check_modules(MODBUS REQUIRED IMPORTED_TARGET libmodbus)
 #   ---/   BOOST   /---
 find_package(Boost REQUIRED COMPONENTS system)
 
-# ---/  JSON    /---
+#   ---/  JSON    /---
 find_package(nlohmann_json REQUIRED)
 
 # ======/   SOURCES  /======
 set(SOURCES
     src/TriangulationLaser.cpp
     src/ConsoleInput.cpp
-    src/laser_test.cpp
+    src/laser_modbus_test.cpp
 )
-# ---/  Executable  /---
+#   ---/  Executable  /---
 add_executable(laser_scanner ${SOURCES})
-# ---/  Headers /---
+#   ---/  Headers /---
 target_include_directories(laser_scanner PRIVATE 
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
-# ---/ Link /---
+#   ---/ Link /---
 target_link_libraries(laser_scanner 
     PkgConfig::MODBUS
     Boost::system
     nlohmann_json::nlohmann_json
 )
 
-# ---/  Windows-special  /---
+#   ---/  Windows-special  /---
 if(WIN32)
     target_link_libraries(laser_scanner ws2_32)
 endif()

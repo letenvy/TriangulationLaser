@@ -18,7 +18,7 @@
 LaserConfig default_config ={
     .deviceName="RIFTEK RF 603 125/500-232-U",
 #ifdef _WIN32
-    .port = "COM3",
+    .port = "COM5",
 #else
     .port ="/dev/ttyUSB0", // didn't check port for Linux yet 
 #endif
@@ -79,16 +79,6 @@ int main(){
         default_config.sensorRangeMm
     );
 
-    std::cout<<"Switching to MODBUS. . ."<<std::endl;
-    if(!laser.switchToModbus()){
-        std::cerr<<"Failed to switch laser to MODBUS"<<std::endl;
-        waitForEnter();
-        return 1;
-    }
-    std::cout<<"Switched successfully!"<<std::endl;
-    waitForEnter();
-    clearConsole();
-
     std::cout<<"\n\nConnecting to laser module . . ."<<std::endl;
 
     if(!laser.connect()){
@@ -96,10 +86,19 @@ int main(){
         waitForEnter();
         return 1;
     }
-
     std::cout<<"Connected successfully!"<<std::endl;
-
     waitForEnter();
+
+    std::cout<<"Switching to MODBUS. . ."<<std::endl;
+    if(!laser.switchToModbus()){
+        std::cerr<<"Failed to switch laser to MODBUS"<<std::endl;
+        waitForEnter();
+        return 1;
+    }
+    
+    std::cout<<"Switched successfully!"<<std::endl;
+    waitForEnter();
+    clearConsole();
 
     laser.setLaserEnabled(false);
     
