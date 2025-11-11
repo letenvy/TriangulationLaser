@@ -79,52 +79,202 @@ int main(){
         default_config.sensorRangeMm
     );
 
-    std::cout<<"Connecting to device in RIFTEK mode . . ."<<std::endl;
+    std::cout << "\n\nConnecting to laser module . . ." << std::endl;
 
-    boost::asio::io_context io;
-    boost::asio::serial_port serial(io);
-
-    try{
-        laser.setupSerialPort(serial);
-        std::cout<<"Connected to "<<default_config.port<<std::endl;
-    }catch(const std::exception&e){
-        std::cerr<<"Failed to connect: "<<e.what()<<std::endl;
+    if (!laser.connect()) {
+        std::cerr << "Failed to connect to the laser!" << std::endl;
+        waitForEnter();
         return 1;
     }
+
+    std::cout << "Connected successfully in " << (laser.getMode() == LaserMode::Riftek ? "RIFTEK" : "MODBUS") << " mode!" << std::endl;
+    waitForEnter();
+
+    std::vector<uint8_t> idResponse;
+    if (laser.riftek_requestId(&idResponse) && idResponse.size() >= 4) {
+        std::cout << "Device ID Response: ";
+        for (auto b : idResponse) {
+            std::cout << std::hex << static_cast<int>(b) << " ";
+        }
+        std::cout << std::dec << std::endl;
+    } else {
+        std::cerr << "Failed to read device ID." << std::endl;
+    }
+
+    std::cout << "Turning laser OFF . . ." << std::endl;
+    if (!laser.riftek_writeParameter(static_cast<uint8_t>(TriangulationLaser::RiftekParameter::LASER_ENABLE), 0)) {
+        std::cerr << "Failed to disable laser!" << std::endl;
+        waitForEnter();
+        return 1;
+    }
+    std::cout << "Laser is now OFF." << std::endl;
+    waitForEnter();
+    clearConsole();
+
+    std::string command;
+
+    std::cout << "Available commands:\n"
+                 " on\t\t\t- enable laser\n"
+                 " off\t\t\t- disable laser\n"
+                 " start\t\t- live display (ESC to stop)\n"
+                 " start-log ontime N\t- log for N seconds\n"
+                 " start-log onsample N\t- log for N samples\n"
+                 " start-log onenter\t- log until ESC pressed\n"
+                 " exit\t\t\t- quit\n"
+                 " \nEnter command: ";
     
-    std::cout<<"Disabling laser (00h=0) . . ."<<std::endl;
-    std::vector<uint8_t> disableCmd = {0x01U, 0x03U, 0x00U, 0x00U};
-    boost::asio::write(serial, boost::asio::buffer(disableCmd));
-    waitForEnter();
-    clearConsole();
 
-    std::cout<<"Enabling laser (00h=1) . . ."<<std::endl;
-    std::vector<uint8_t> disableCmd = {0x01U, 0x03U, 0x00U, 0x01U};
-    boost::asio::write(serial, boost::asio::buffer(disableCmd));
-    waitForEnter();
-    clearConsole();
+    std::cout << "\nTurning laser OFF before exit . . .\n";
+    laser.riftek_writeParameter(static_cast<uint8_t>(TriangulationLaser::RiftekParameter::LASER_ENABLE), 0);
+    laser.disconnect();
+    std::cout << "\nGoodbye!" << std::endl;
+    return 0;
+}
 
-    std::cout<<"Requesting measurement (06h) . . ."<<std::endl;
-    std::vector<uint8_t> readResultCmd={0x01U,0x03U,0x06U,0x00U};
-    boost::asio::write(serial,boost::asio::buffer(readResultCmd));
+struct MeasurementData {
+    uint16_t raw = 0;
+    double mm = 0.0;
+    bool success = false;
+    std::chrono::steady_clock::time_point measurementStart;
+    std::chrono::steady_clock::time_point measurementEnd;
+    std::chrono::system_clock::time_point globalTime;
+};
 
-    std::vector<uint8_t> rawValue(2);
-    try{
-        boost::asio::read(serial,boost::asio::buffer(rawValue),boost::asio::transfer_exactly(2));
-    }catch(const std::exception& e){
-        std::cerr<<"Failed to read measurement: "<<e.what()<<std::endl;
-        serial.close();
-        return 1;
+MeasurementData performMeasurement(TriangulationLaser& laser) {
+    MeasurementData data;
+
+    data.measurementStart = std::chrono::steady_clock::now();
+
+    data.success = laser.riftek_requestResult(data.raw);
+    if (data.success) {
+        data.mm = laser.convertRawToMm(data.raw);
     }
 
-    uint16_t raw=(rawValue[0]<<8|rawValue[1]);
-    double mm=static_cast<double>(raw)*default_config.sensorRangeMm/16384.0;
-    std::cout<<"Raw value: "<<raw<<std::endl;
-    std::cout<<"Distance: "<<std::fixed<<std::setprecision(3)<<mm<<" mm"<<std::endl;
+    data.measurementEnd = std::chrono::steady_clock::now();
+    data.globalTime = std::chrono::system_clock::now();
 
-    std::cout<<"Disabling laser and closing connection . . ."<<std::endl;
-    serial.close();
+    return data;
+}
 
-    std::cout<<"Goodbye";
-    return 0;
+void runLiveMode(TriangulationLaser& laser, int intervalMs) {
+    clearConsole();
+    std::cout << " Live mode\t(press ESC to stop)\n" << std::endl;
+
+    ConsoleInput input;
+    bool running = true;
+    auto lastMeasurementStart = std::chrono::steady_clock::now();
+
+    while (running && laser.isConnected()) {
+        if (input.isEscapePressed()) {
+            running = false;
+            break;
+        }
+
+        MeasurementData data = performMeasurement(laser);
+
+        double dt = std::chrono::duration<double>(data.measurementStart - lastMeasurementStart).count();
+        double hz = (dt > 0) ? 1.0 / dt : 0.0;
+        lastMeasurementStart = data.measurementStart;
+
+        if (data.success) {
+            std::cout << data.mm << " mm\r|\r" << std::fixed << std::setprecision(1) << hz << " Hz\r";
+        } else {
+            std::cout << "Measurement failed!\r";
+        }
+        std::cout.flush();
+        std::this_thread::sleep_for(std::chrono::milliseconds(intervalMs));
+    }
+
+    std::cout << "\nReturning" << std::endl;
+    waitForEnter();
+    clearConsole();
+}
+
+void runLiveLoggingMode(TriangulationLaser& laser, int intervalMs, const std::string& mode, double targetValue) {
+    clearConsole();
+    std::cout << " Live logging mode\t(press ESC to stop)" << std::endl;
+
+    ConsoleInput input;
+    bool running = true;
+    int sampleCount = 0;
+    auto startTime = std::chrono::steady_clock::now();
+
+    auto logTime = std::chrono::system_clock::now();
+    std::time_t logTimeT = std::chrono::system_clock::to_time_t(logTime);
+    std::stringstream filenameSS;
+    filenameSS << "laser_log_" << std::put_time(std::localtime(&logTimeT), "%Y%m%d_%H%M%S") << ".json";
+    std::string filename = filenameSS.str();
+
+    std::ofstream logFile(filename);
+    if (!logFile.is_open()) {
+        std::cerr << "Failed to create log file: " << filename << std::endl;
+        return;
+    }
+
+    std::cout << "Logging to: " << filename << '\n' << std::endl;
+
+    auto lastMeasurementStart = std::chrono::steady_clock::now();
+
+    logFile << "[\n";
+    bool firstEntry = true;
+
+    while (running && laser.isConnected()) {
+        if (input.isEscapePressed()) {
+            std::cout << "\nLogging stopped by user" << std::endl;
+            running = false;
+            break;
+        }
+
+        if (mode == "time") {
+            auto currentTime = std::chrono::steady_clock::now();
+            double elapsed = std::chrono::duration<double>(currentTime - startTime).count();
+            if (elapsed >= targetValue) {
+                std::cout << "\nLogging time completed" << std::endl;
+                break;
+            }
+        } else if (mode == "sample") {
+            if (sampleCount >= static_cast<int>(targetValue)) {
+                std::cout << "\nSample count completed" << std::endl;
+                break;
+            }
+        }
+
+        MeasurementData data = performMeasurement(laser);
+
+        double dt = std::chrono::duration<double>(data.measurementStart - lastMeasurementStart).count();
+        double hz = (dt > 0) ? 1.0 / dt : 0.0;
+        lastMeasurementStart = data.measurementStart;
+
+        if (data.success) {
+            std::cout << "Sample " << sampleCount + 1 << ": " << data.mm << " mm | "
+                      << std::fixed << std::setprecision(1) << hz << " Hz\r";
+        } else {
+            std::cout << "Sample " << sampleCount + 1 << " Measurement failed!\r";
+        }
+        std::cout.flush();
+
+        nlohmann::json jsonEntry;
+        jsonEntry["timestamp"] = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                     data.globalTime.time_since_epoch()).count();
+        jsonEntry["raw"] = data.raw;
+        jsonEntry["mm"] = data.mm;
+
+        if (!firstEntry) {
+            logFile << ",\n";
+        }
+        logFile << jsonEntry.dump(4);
+        logFile.flush();
+
+        firstEntry = false;
+        sampleCount++;
+        std::this_thread::sleep_for(std::chrono::milliseconds(intervalMs));
+    }
+
+    logFile << "\n]\n";
+    logFile.close();
+
+    std::cout << "\nLog saved to: " << filename << std::endl;
+    std::cout << "Returning" << std::endl;
+    waitForEnter();
+    clearConsole();
 }
