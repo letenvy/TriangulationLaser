@@ -42,7 +42,7 @@ public:
                                 int dataBits=8,
                                 int stopBits=1,
                                 double semsorRangeMm=500.0,
-                                double baseRangeMm=125);
+                                double baseRangeMm=125.0);
     ~TriangulationLaser();
 
     Riftek riftek(){return Riftek(*this);}
