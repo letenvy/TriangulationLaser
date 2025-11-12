@@ -72,6 +72,6 @@ private:
     LaserMode mode_=LaserMode::Unknown;
     uint8_t riftek_address_=1;
 
-    std::string normalizePortName(const std::string*port) const;
+    std::string normalizePortName(const std::string&port) const;
     bool setupSerialPort(boost::asio::serial_port& serial);
 };
