@@ -23,7 +23,7 @@ public:
         explicit Riftek(TriangulationLaser& parent): parent_(parent){}
         
         bool sendRequest(const std::vector<uint8_t>& request);
-        std::optional<std::vector<uint8_t>>listenAnswer(int timeout_ms=2000);
+        std::optional<std::vector<uint8_t>>listenAnswer(int timeout_ms=2000,size_t max_size=20);
 
         std::optional<uint16_t> requestResult();
         std::optional<std::vector<uint8_t>> requestID();
