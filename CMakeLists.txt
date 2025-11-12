@@ -21,7 +21,7 @@ find_package(nlohmann_json REQUIRED)
 set(SOURCES
     src/TriangulationLaser.cpp
     src/ConsoleInput.cpp
-    src/laser_riftek_test.cpp
+    src/test_onlaser.cpp
 )
 #   ---/  Executable  /---
 add_executable(laser_scanner ${SOURCES})
