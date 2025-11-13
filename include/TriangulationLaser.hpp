@@ -66,9 +66,10 @@ private:
     double minDistanceMm_;
 
     boost::asio::io_context io_;
+    std::thread io_thread_;
     std::unique_ptr<boost::asio::serial_port> serial_port_=nullptr;
-    bool serial_connected_=false;
-
+    bool serial_connected_ = false;
+    
     LaserMode mode_=LaserMode::Unknown;
     uint8_t riftek_address_=1;
 

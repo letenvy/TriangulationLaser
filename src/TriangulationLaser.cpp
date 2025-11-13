@@ -69,6 +69,9 @@ bool TriangulationLaser::connect() {
         if (!setupSerialPort(*serial_port_)) {
             return false;
         }
+
+        io_thread_ = std::thread([this]() { io_.run(); });
+
         serial_connected_ = true;
         mode_ = LaserMode::Riftek;
         std::cout << "[Laser] Connected in RIFTEK mode to " << portName_ << std::endl;
@@ -81,6 +84,11 @@ bool TriangulationLaser::connect() {
 }
 
 void TriangulationLaser::disconnect() {
+    io_.stop();
+    if (io_thread_.joinable()) {
+        io_thread_.join();
+    }
+
     if (serial_port_ && serial_port_->is_open()) {
         serial_port_->close();
         serial_connected_ = false;
@@ -140,7 +148,7 @@ bool TriangulationLaser::Riftek::sendRequest(const std::vector<uint8_t>& request
     return true;
 }
 
-std::optional<std::vector<uint8_t>> TriangulationLaser::Riftek::listenAnswer(int timeout_ms,size_t max_size) {
+std::optional<std::vector<uint8_t>> TriangulationLaser::Riftek::listenAnswer(int timeout_ms, size_t max_size) {
     if (!parent_.serial_connected_) {
         std::cerr << "[Laser] Not connected\n";
         return std::nullopt;
@@ -148,41 +156,14 @@ std::optional<std::vector<uint8_t>> TriangulationLaser::Riftek::listenAnswer(int
 
     std::vector<uint8_t> response(max_size);
 
-    boost::asio::deadline_timer timer(parent_.io_);
-    timer.expires_from_now(boost::posix_time::milliseconds(timeout_ms));
-
-    std::promise<std::pair<std::size_t, boost::system::error_code>> result_promise;
-    auto result_future = result_promise.get_future();
-
-    bool timed_out = false;
-
-    parent_.serial_port_->async_read_some(boost::asio::buffer(response),
-        [&result_promise, &timed_out](const boost::system::error_code& e, std::size_t bytes_transferred) {
-            if (!timed_out) {
-                result_promise.set_value({bytes_transferred, e});
-            }
-        });
-
-    timer.async_wait([&timed_out, this](const boost::system::error_code& e) {
-        if (!e) {
-            timed_out = true;
-            parent_.serial_port_->cancel();
-        }
-    });
-
-    auto status = result_future.wait_for(std::chrono::milliseconds(timeout_ms + 100));
-    if (status == std::future_status::timeout || timed_out) {
-        std::cerr << "[Laser] Read timeout\n";
-        return std::nullopt;
-    }
-
-    auto [bytes, ec] = result_future.get();
+    boost::system::error_code ec;
+    auto len = parent_.serial_port_->read_some(boost::asio::buffer(response), ec);
     if (ec) {
         std::cerr << "[Laser] Read error: " << ec.message() << std::endl;
         return std::nullopt;
     }
 
-    response.resize(bytes);
+    response.resize(len);
     return response;
 }
 

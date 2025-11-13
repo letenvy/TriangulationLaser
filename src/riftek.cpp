@@ -70,6 +70,7 @@ int main() {
     waitForEnter();
 
     auto rf = laser.riftek();
+    rf.writeParameter(0x00, 0x01);
 
     while (true) {
         clearConsole();
@@ -83,6 +84,8 @@ int main() {
 
         int choice;
         std::cin >> choice;
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');  // ← добавить
+
 
         if (choice == 1) {
             std::cout << "Enter command bytes in hex (e.g. 01 86 for REQUEST_RESULT): ";
@@ -165,13 +168,14 @@ int main() {
                     lastMeasurementStart = now;
 
                     std::cout << "\rRaw: " << *raw << " | Hex: 0x" << std::hex << *raw << std::dec
-                              << " | Distance: ";
+                            << " | Distance: ";
                     if (*raw != 0 && *raw != 16384) {
                         std::cout << std::fixed << std::setprecision(2) << mm << " mm";
                     } else {
                         std::cout << "null";
                     }
                     std::cout << " | " << std::fixed << std::setprecision(1) << hz << " Hz";
+
 
                     std::cout.flush();
                 } else {
