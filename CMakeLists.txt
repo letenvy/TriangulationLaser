@@ -28,14 +28,21 @@ set(riftek_test
     src/ConsoleInput.cpp
     src/riftek.cpp
 )
+set(tester_communication
+    src/communication.cpp
+)
 #   ---/  Executable  /---
 add_executable(tester_simple ${simple_test})
 add_executable(tester_riftek ${riftek_test})
+add_executable(tester_communication ${tester_communication})
 #   ---/  Headers /---
 target_include_directories(tester_simple PRIVATE 
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 target_include_directories(tester_riftek PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+target_include_directories(tester_communication PRIVATE 
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 #   ---/ Link /---
@@ -49,9 +56,14 @@ target_link_libraries(tester_riftek
     Boost::system
     nlohmann_json::nlohmann_json
 )
-
+target_link_libraries(tester_communication 
+    #PkgConfig::MODBUS
+    Boost::system
+    nlohmann_json::nlohmann_json
+)
 #   ---/  Windows-special  /---
 if(WIN32)
     target_link_libraries(tester_simple ws2_32)
     target_link_libraries(tester_riftek ws2_32)
+    target_link_libraries(tester_communication ws2_32 mswsock iphlpapi)
 endif()
